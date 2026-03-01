@@ -1,0 +1,26 @@
+"""Smart Recuperator — Constants."""
+
+DOMAIN = "smart_recuperator"
+PLATFORMS = ["sensor", "binary_sensor"]
+
+# ── Config keys ──
+CONF_DEVICES = "devices"
+CONF_DEVICE_NAME = "name"
+CONF_FAN_ENTITY = "fan_entity"
+CONF_HUMIDITY_SENSOR = "humidity_sensor"
+CONF_TEMPERATURE_SENSOR = "temperature_sensor"
+CONF_FILTER_TIMER_SENSOR = "filter_timer_sensor"
+CONF_HEATING_ENTITY = "heating_entity"
+CONF_WEATHER_ENTITY = "weather_entity"
+
+# ── Defaults ──
+DEFAULT_HUMIDITY_HIGH = 65
+DEFAULT_HUMIDITY_LOW = 55
+DEFAULT_NIGHT_SPEED = 25
+DEFAULT_HEATING_MIN_SPEED = 25
+DEFAULT_COLD_THRESHOLD = 5
+DEFAULT_HOT_THRESHOLD = 30
+DEFAULT_FILTER_WARN_DAYS = 14
+DEFAULT_NIGHT_START = "22:00"
+DEFAULT_NIGHT_END = "07:00"
+DEFAULT_NORMAL_SPEED = 50

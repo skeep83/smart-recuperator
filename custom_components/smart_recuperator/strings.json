@@ -1,0 +1,69 @@
+{
+    "config": {
+        "step": {
+            "user": {
+                "title": "Smart Recuperator",
+                "description": "Configure global settings for your recuperators",
+                "data": {
+                    "heating_entity": "Heating entity (binary_sensor)",
+                    "weather_entity": "Weather entity"
+                }
+            },
+            "devices": {
+                "title": "Add Recuperator",
+                "description": "Add a recuperator device with its sensors",
+                "data": {
+                    "name": "Device name",
+                    "fan_entity": "Fan entity",
+                    "humidity_sensor": "Humidity sensor",
+                    "temperature_sensor": "Temperature sensor",
+                    "filter_timer_sensor": "Filter timer sensor",
+                    "add_another": "Add another device?"
+                }
+            },
+            "modules": {
+                "title": "Automation Modules",
+                "description": "Enable/disable modules and set thresholds",
+                "data": {
+                    "enable_humidity": "Humidity Control",
+                    "enable_heating_sync": "Heating Sync",
+                    "enable_dewpoint": "Dew Point Protection",
+                    "enable_night_mode": "Night Mode",
+                    "enable_filter_alert": "Filter Alerts",
+                    "enable_weather": "Weather Adaptation",
+                    "humidity_high": "Humidity boost threshold (%)",
+                    "humidity_low": "Humidity stop threshold (%)",
+                    "night_speed": "Night mode speed (%)",
+                    "normal_speed": "Normal speed (%)",
+                    "heating_min_speed": "Heating min speed (%)",
+                    "cold_threshold": "Cold outdoor threshold (°C)",
+                    "hot_threshold": "Hot outdoor threshold (°C)",
+                    "filter_warn_days": "Filter warning (days)",
+                    "night_start": "Night mode start (HH:MM)",
+                    "night_end": "Night mode end (HH:MM)"
+                }
+            }
+        }
+    },
+    "options": {
+        "step": {
+            "init": {
+                "title": "Smart Recuperator Settings",
+                "data": {
+                    "enable_humidity": "Humidity Control",
+                    "enable_heating_sync": "Heating Sync",
+                    "enable_dewpoint": "Dew Point Protection",
+                    "enable_night_mode": "Night Mode",
+                    "enable_filter_alert": "Filter Alerts",
+                    "enable_weather": "Weather Adaptation",
+                    "humidity_high": "Humidity boost threshold (%)",
+                    "humidity_low": "Humidity stop threshold (%)",
+                    "night_speed": "Night mode speed (%)",
+                    "normal_speed": "Normal speed (%)",
+                    "night_start": "Night mode start (HH:MM)",
+                    "night_end": "Night mode end (HH:MM)"
+                }
+            }
+        }
+    }
+}
