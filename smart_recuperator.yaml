@@ -1,0 +1,733 @@
+###############################################################################
+#  Smart Recuperator — Climate Automation Package
+#  Coordinates Blauberg recuperators with heating, humidity, weather & more
+#  https://github.com/skeep83/blauberg-recuperator-card
+###############################################################################
+
+# ═══════════════════════════════════════════════════════════════════════════════
+#  INPUT CONTROLS — Thresholds & Toggles
+# ═══════════════════════════════════════════════════════════════════════════════
+
+input_boolean:
+  smart_recup_humidity_control:
+    name: "Рекуператор: Контроль влажности"
+    icon: mdi:water-percent
+  smart_recup_heating_sync:
+    name: "Рекуператор: Синхронизация с отоплением"
+    icon: mdi:radiator
+  smart_recup_dewpoint_protect:
+    name: "Рекуператор: Защита от конденсата"
+    icon: mdi:water-alert
+  smart_recup_night_mode:
+    name: "Рекуператор: Ночной режим"
+    icon: mdi:weather-night
+  smart_recup_filter_alert:
+    name: "Рекуператор: Оповещение о фильтре"
+    icon: mdi:air-filter
+  smart_recup_weather_adapt:
+    name: "Рекуператор: Адаптация к погоде"
+    icon: mdi:weather-windy
+
+input_number:
+  smart_recup_humidity_high:
+    name: "Порог влажности Boost (%)"
+    min: 40
+    max: 90
+    step: 5
+    initial: 65
+    unit_of_measurement: "%"
+    icon: mdi:water-plus
+  smart_recup_humidity_low:
+    name: "Порог влажности Стоп (%)"
+    min: 30
+    max: 70
+    step: 5
+    initial: 55
+    unit_of_measurement: "%"
+    icon: mdi:water-minus
+  smart_recup_night_speed:
+    name: "Скорость в ночном режиме (%)"
+    min: 0
+    max: 75
+    step: 25
+    initial: 25
+    unit_of_measurement: "%"
+    icon: mdi:fan-speed-1
+  smart_recup_heating_min_speed:
+    name: "Мин. скорость при отоплении (%)"
+    min: 0
+    max: 50
+    step: 25
+    initial: 25
+    unit_of_measurement: "%"
+    icon: mdi:fan-speed-1
+  smart_recup_filter_warn_days:
+    name: "Предупреждение о фильтре (дней)"
+    min: 7
+    max: 30
+    step: 1
+    initial: 14
+    unit_of_measurement: "д."
+    icon: mdi:calendar-alert
+  smart_recup_cold_threshold:
+    name: "Порог холодной улицы (°C)"
+    min: -10
+    max: 10
+    step: 1
+    initial: 5
+    unit_of_measurement: "°C"
+    icon: mdi:thermometer-low
+  smart_recup_hot_threshold:
+    name: "Порог жаркой улицы (°C)"
+    min: 25
+    max: 40
+    step: 1
+    initial: 30
+    unit_of_measurement: "°C"
+    icon: mdi:thermometer-high
+
+input_datetime:
+  smart_recup_night_start:
+    name: "Начало ночного режима"
+    has_date: false
+    has_time: true
+    initial: "22:00:00"
+  smart_recup_night_end:
+    name: "Конец ночного режима"
+    has_date: false
+    has_time: true
+    initial: "07:00:00"
+
+# ═══════════════════════════════════════════════════════════════════════════════
+#  TEMPLATE SENSORS
+# ═══════════════════════════════════════════════════════════════════════════════
+
+template:
+  - sensor:
+      # ── Outdoor temperature from weather integration ──
+      - name: "Рекуператор: Уличная температура"
+        unique_id: smart_recup_outdoor_temp
+        unit_of_measurement: "°C"
+        device_class: temperature
+        state: >
+          {{ state_attr('weather.forecast_home_assistant', 'temperature') | float(0) }}
+        icon: mdi:thermometer
+
+      # ── Outdoor humidity from weather integration ──
+      - name: "Рекуператор: Уличная влажность"
+        unique_id: smart_recup_outdoor_humidity
+        unit_of_measurement: "%"
+        device_class: humidity
+        state: >
+          {{ state_attr('weather.forecast_home_assistant', 'humidity') | float(0) }}
+        icon: mdi:water-percent
+
+      # ── Dew point per room ──
+      # Magnus formula: Td = (237.7 × α) / (17.27 − α)
+      # α = (17.27 × T) / (237.7 + T) + ln(RH/100)
+
+      - name: "Точка росы: Спальня Амели"
+        unique_id: smart_recup_dewpoint_ameli
+        unit_of_measurement: "°C"
+        device_class: temperature
+        state: >
+          {% set t = states('sensor.temperature_3') | float(22) %}
+          {% set rh = states('sensor.humidity_3') | float(50) %}
+          {% if rh <= 0 %}{{ 0 }}
+          {% else %}
+            {% set alpha = (17.27 * t) / (237.7 + t) + log(rh / 100.0) %}
+            {{ ((237.7 * alpha) / (17.27 - alpha)) | round(1) }}
+          {% endif %}
+        icon: mdi:water-thermometer
+
+      - name: "Точка росы: Мастер Спальня"
+        unique_id: smart_recup_dewpoint_master
+        unit_of_measurement: "°C"
+        device_class: temperature
+        state: >
+          {% set t = states('sensor.temperature_2') | float(22) %}
+          {% set rh = states('sensor.humidity_2') | float(50) %}
+          {% if rh <= 0 %}{{ 0 }}
+          {% else %}
+            {% set alpha = (17.27 * t) / (237.7 + t) + log(rh / 100.0) %}
+            {{ ((237.7 * alpha) / (17.27 - alpha)) | round(1) }}
+          {% endif %}
+        icon: mdi:water-thermometer
+
+      - name: "Точка росы: Спальня Пацанов"
+        unique_id: smart_recup_dewpoint_boys
+        unit_of_measurement: "°C"
+        device_class: temperature
+        state: >
+          {% set t = states('sensor.temperature') | float(22) %}
+          {% set rh = states('sensor.humidity') | float(50) %}
+          {% if rh <= 0 %}{{ 0 }}
+          {% else %}
+            {% set alpha = (17.27 * t) / (237.7 + t) + log(rh / 100.0) %}
+            {{ ((237.7 * alpha) / (17.27 - alpha)) | round(1) }}
+          {% endif %}
+        icon: mdi:water-thermometer
+
+      # ── Filter life remaining (days) ──
+      - name: "Фильтр: Спальня Амели"
+        unique_id: smart_recup_filter_ameli
+        unit_of_measurement: "д."
+        state: >
+          {% set v = states('sensor.filter_timer_countdown') %}
+          {% if v in ['unavailable','unknown','—'] %}0
+          {% elif v | int(-1) >= 0 %}{{ v | int }}
+          {% else %}
+            {% set d = v | regex_findall('(\d+)\s*д') %}
+            {% set h = v | regex_findall('(\d+)\s*ч') %}
+            {{ (d[0]|int(0) if d else 0) + ((h[0]|int(0) / 24)|round(0) if h else 0) }}
+          {% endif %}
+        icon: mdi:air-filter
+
+      - name: "Фильтр: Мастер Спальня"
+        unique_id: smart_recup_filter_master
+        unit_of_measurement: "д."
+        state: >
+          {% set v = states('sensor.filter_timer_countdown_3') %}
+          {% if v in ['unavailable','unknown','—'] %}0
+          {% elif v | int(-1) >= 0 %}{{ v | int }}
+          {% else %}
+            {% set d = v | regex_findall('(\d+)\s*д') %}
+            {% set h = v | regex_findall('(\d+)\s*ч') %}
+            {{ (d[0]|int(0) if d else 0) + ((h[0]|int(0) / 24)|round(0) if h else 0) }}
+          {% endif %}
+        icon: mdi:air-filter
+
+      - name: "Фильтр: Спальня Пацанов"
+        unique_id: smart_recup_filter_boys
+        unit_of_measurement: "д."
+        state: >
+          {% set v = states('sensor.filter_timer_countdown_2') %}
+          {% if v in ['unavailable','unknown','—'] %}0
+          {% elif v | int(-1) >= 0 %}{{ v | int }}
+          {% else %}
+            {% set d = v | regex_findall('(\d+)\s*д') %}
+            {% set h = v | regex_findall('(\d+)\s*ч') %}
+            {{ (d[0]|int(0) if d else 0) + ((h[0]|int(0) / 24)|round(0) if h else 0) }}
+          {% endif %}
+        icon: mdi:air-filter
+
+      # ── Smart status (summary for each recuperator) ──
+      - name: "Рекуператор Амели: Статус"
+        unique_id: smart_recup_status_ameli
+        state: >
+          {% set fan = states('fan.siku_blauberg_fan_192_168_1_41') %}
+          {% set hum = states('sensor.humidity_3') | float(0) %}
+          {% set high = states('input_number.smart_recup_humidity_high') | float(65) %}
+          {% if fan == 'off' %}Выкл
+          {% elif hum > high %}Осушение
+          {% elif is_state('input_boolean.smart_recup_night_mode', 'on') and now().hour >= 22 or now().hour < 7 %}Ночной
+          {% elif is_state('binary_sensor.altal_heating', 'on') %}Эконом
+          {% else %}Норма
+          {% endif %}
+        icon: mdi:fan
+
+      - name: "Рекуператор Мастер: Статус"
+        unique_id: smart_recup_status_master
+        state: >
+          {% set fan = states('fan.siku_blauberg_fan_192_168_1_49') %}
+          {% set hum = states('sensor.humidity_2') | float(0) %}
+          {% set high = states('input_number.smart_recup_humidity_high') | float(65) %}
+          {% if fan == 'off' %}Выкл
+          {% elif hum > high %}Осушение
+          {% elif is_state('input_boolean.smart_recup_night_mode', 'on') and now().hour >= 22 or now().hour < 7 %}Ночной
+          {% elif is_state('binary_sensor.altal_heating', 'on') %}Эконом
+          {% else %}Норма
+          {% endif %}
+        icon: mdi:fan
+
+      - name: "Рекуператор Пацанов: Статус"
+        unique_id: smart_recup_status_boys
+        state: >
+          {% set fan = states('fan.siku_blauberg_fan_192_168_1_50') %}
+          {% set hum = states('sensor.humidity') | float(0) %}
+          {% set high = states('input_number.smart_recup_humidity_high') | float(65) %}
+          {% if fan == 'off' %}Выкл
+          {% elif hum > high %}Осушение
+          {% elif is_state('input_boolean.smart_recup_night_mode', 'on') and now().hour >= 22 or now().hour < 7 %}Ночной
+          {% elif is_state('binary_sensor.altal_heating', 'on') %}Эконом
+          {% else %}Норма
+          {% endif %}
+        icon: mdi:fan
+
+# ═══════════════════════════════════════════════════════════════════════════════
+#  AUTOMATIONS
+# ═══════════════════════════════════════════════════════════════════════════════
+
+automation:
+
+  # ──────────────────────────────────────────────────────────────────────────
+  #  1. HUMIDITY CONTROL — Boost when humidity > threshold
+  # ──────────────────────────────────────────────────────────────────────────
+
+  # Спальня Амели — Boost ON
+  - id: smart_recup_humidity_boost_ameli
+    alias: "Рекуператор: Влажность Boost — Амели"
+    description: "Включает boost при высокой влажности в Спальне Амели"
+    trigger:
+      - platform: numeric_state
+        entity_id: sensor.humidity_3
+        above: input_number.smart_recup_humidity_high
+        for: "00:02:00"
+    condition:
+      - condition: state
+        entity_id: input_boolean.smart_recup_humidity_control
+        state: "on"
+      - condition: state
+        entity_id: fan.siku_blauberg_fan_192_168_1_41
+        state: "on"
+    action:
+      - service: fan.set_percentage
+        target:
+          entity_id: fan.siku_blauberg_fan_192_168_1_41
+        data:
+          percentage: 100
+      - service: persistent_notification.create
+        data:
+          title: "💧 Влажность: Спальня Амели"
+          message: "Влажность {{ states('sensor.humidity_3') }}% > пороговое значение. Рекуператор переведён на максимум."
+
+  # Спальня Амели — Boost OFF
+  - id: smart_recup_humidity_normal_ameli
+    alias: "Рекуператор: Влажность Норма — Амели"
+    description: "Возвращает нормальную скорость при снижении влажности"
+    trigger:
+      - platform: numeric_state
+        entity_id: sensor.humidity_3
+        below: input_number.smart_recup_humidity_low
+        for: "00:05:00"
+    condition:
+      - condition: state
+        entity_id: input_boolean.smart_recup_humidity_control
+        state: "on"
+    action:
+      - service: fan.set_percentage
+        target:
+          entity_id: fan.siku_blauberg_fan_192_168_1_41
+        data:
+          percentage: 50
+
+  # Мастер Спальня — Boost ON
+  - id: smart_recup_humidity_boost_master
+    alias: "Рекуператор: Влажность Boost — Мастер"
+    trigger:
+      - platform: numeric_state
+        entity_id: sensor.humidity_2
+        above: input_number.smart_recup_humidity_high
+        for: "00:02:00"
+    condition:
+      - condition: state
+        entity_id: input_boolean.smart_recup_humidity_control
+        state: "on"
+      - condition: state
+        entity_id: fan.siku_blauberg_fan_192_168_1_49
+        state: "on"
+    action:
+      - service: fan.set_percentage
+        target:
+          entity_id: fan.siku_blauberg_fan_192_168_1_49
+        data:
+          percentage: 100
+      - service: persistent_notification.create
+        data:
+          title: "💧 Влажность: Мастер Спальня"
+          message: "Влажность {{ states('sensor.humidity_2') }}% > пороговое значение. Boost активирован."
+
+  # Мастер Спальня — Boost OFF
+  - id: smart_recup_humidity_normal_master
+    alias: "Рекуператор: Влажность Норма — Мастер"
+    trigger:
+      - platform: numeric_state
+        entity_id: sensor.humidity_2
+        below: input_number.smart_recup_humidity_low
+        for: "00:05:00"
+    condition:
+      - condition: state
+        entity_id: input_boolean.smart_recup_humidity_control
+        state: "on"
+    action:
+      - service: fan.set_percentage
+        target:
+          entity_id: fan.siku_blauberg_fan_192_168_1_49
+        data:
+          percentage: 50
+
+  # Спальня Пацанов — Boost ON
+  - id: smart_recup_humidity_boost_boys
+    alias: "Рекуператор: Влажность Boost — Пацаны"
+    trigger:
+      - platform: numeric_state
+        entity_id: sensor.humidity
+        above: input_number.smart_recup_humidity_high
+        for: "00:02:00"
+    condition:
+      - condition: state
+        entity_id: input_boolean.smart_recup_humidity_control
+        state: "on"
+      - condition: state
+        entity_id: fan.siku_blauberg_fan_192_168_1_50
+        state: "on"
+    action:
+      - service: fan.set_percentage
+        target:
+          entity_id: fan.siku_blauberg_fan_192_168_1_50
+        data:
+          percentage: 100
+      - service: persistent_notification.create
+        data:
+          title: "💧 Влажность: Спальня Пацанов"
+          message: "Влажность {{ states('sensor.humidity') }}% > пороговое значение. Boost активирован."
+
+  # Спальня Пацанов — Boost OFF
+  - id: smart_recup_humidity_normal_boys
+    alias: "Рекуператор: Влажность Норма — Пацаны"
+    trigger:
+      - platform: numeric_state
+        entity_id: sensor.humidity
+        below: input_number.smart_recup_humidity_low
+        for: "00:05:00"
+    condition:
+      - condition: state
+        entity_id: input_boolean.smart_recup_humidity_control
+        state: "on"
+    action:
+      - service: fan.set_percentage
+        target:
+          entity_id: fan.siku_blauberg_fan_192_168_1_50
+        data:
+          percentage: 50
+
+  # ──────────────────────────────────────────────────────────────────────────
+  #  2. HEATING SYNC — Reduce speed when boiler is running & cold outside
+  # ──────────────────────────────────────────────────────────────────────────
+
+  - id: smart_recup_heating_on
+    alias: "Рекуператор: Отопление включено — Эконом"
+    description: "Снижает обороты для сохранения тепла, когда котёл работает и на улице холодно"
+    trigger:
+      - platform: state
+        entity_id: binary_sensor.altal_heating
+        to: "on"
+        for: "00:01:00"
+    condition:
+      - condition: state
+        entity_id: input_boolean.smart_recup_heating_sync
+        state: "on"
+      - condition: numeric_state
+        entity_id: sensor.smart_recup_outdoor_temp
+        below: input_number.smart_recup_cold_threshold
+    action:
+      - service: fan.set_percentage
+        target:
+          entity_id:
+            - fan.siku_blauberg_fan_192_168_1_41
+            - fan.siku_blauberg_fan_192_168_1_49
+            - fan.siku_blauberg_fan_192_168_1_50
+        data:
+          percentage: "{{ states('input_number.smart_recup_heating_min_speed') | int(25) }}"
+      - service: persistent_notification.create
+        data:
+          title: "🔥 Отопление: Эконом режим"
+          message: >
+            Котёл работает, на улице {{ states('sensor.smart_recup_outdoor_temp') }}°C.
+            Рекуператоры переведены на {{ states('input_number.smart_recup_heating_min_speed') }}%.
+
+  - id: smart_recup_heating_off
+    alias: "Рекуператор: Отопление выключено — Норма"
+    description: "Возвращает нормальные обороты после остановки котла"
+    trigger:
+      - platform: state
+        entity_id: binary_sensor.altal_heating
+        to: "off"
+        for: "00:03:00"
+    condition:
+      - condition: state
+        entity_id: input_boolean.smart_recup_heating_sync
+        state: "on"
+    action:
+      - service: fan.set_percentage
+        target:
+          entity_id:
+            - fan.siku_blauberg_fan_192_168_1_41
+            - fan.siku_blauberg_fan_192_168_1_49
+            - fan.siku_blauberg_fan_192_168_1_50
+        data:
+          percentage: 50
+
+  # ──────────────────────────────────────────────────────────────────────────
+  #  3. DEW POINT PROTECTION — Boost when close to condensation
+  # ──────────────────────────────────────────────────────────────────────────
+
+  - id: smart_recup_dewpoint_ameli
+    alias: "Рекуператор: Конденсат — Амели"
+    description: "Защита от конденсата: увеличивает обороты когда ΔT < 3°C до точки росы"
+    trigger:
+      - platform: template
+        value_template: >
+          {{ (states('sensor.temperature_3') | float(22) -
+              states('sensor.smart_recup_dewpoint_ameli') | float(10)) < 3 }}
+        for: "00:03:00"
+    condition:
+      - condition: state
+        entity_id: input_boolean.smart_recup_dewpoint_protect
+        state: "on"
+      - condition: state
+        entity_id: fan.siku_blauberg_fan_192_168_1_41
+        state: "on"
+    action:
+      - service: fan.set_percentage
+        target:
+          entity_id: fan.siku_blauberg_fan_192_168_1_41
+        data:
+          percentage: 75
+      - service: persistent_notification.create
+        data:
+          title: "⚠️ Конденсат: Спальня Амели"
+          message: >
+            T°={{ states('sensor.temperature_3') }}°C, Точка росы={{ states('sensor.smart_recup_dewpoint_ameli') }}°C.
+            Ускоряю вентиляцию.
+
+  - id: smart_recup_dewpoint_master
+    alias: "Рекуператор: Конденсат — Мастер"
+    trigger:
+      - platform: template
+        value_template: >
+          {{ (states('sensor.temperature_2') | float(22) -
+              states('sensor.smart_recup_dewpoint_master') | float(10)) < 3 }}
+        for: "00:03:00"
+    condition:
+      - condition: state
+        entity_id: input_boolean.smart_recup_dewpoint_protect
+        state: "on"
+      - condition: state
+        entity_id: fan.siku_blauberg_fan_192_168_1_49
+        state: "on"
+    action:
+      - service: fan.set_percentage
+        target:
+          entity_id: fan.siku_blauberg_fan_192_168_1_49
+        data:
+          percentage: 75
+
+  - id: smart_recup_dewpoint_boys
+    alias: "Рекуператор: Конденсат — Пацаны"
+    trigger:
+      - platform: template
+        value_template: >
+          {{ (states('sensor.temperature') | float(22) -
+              states('sensor.smart_recup_dewpoint_boys') | float(10)) < 3 }}
+        for: "00:03:00"
+    condition:
+      - condition: state
+        entity_id: input_boolean.smart_recup_dewpoint_protect
+        state: "on"
+      - condition: state
+        entity_id: fan.siku_blauberg_fan_192_168_1_50
+        state: "on"
+    action:
+      - service: fan.set_percentage
+        target:
+          entity_id: fan.siku_blauberg_fan_192_168_1_50
+        data:
+          percentage: 75
+
+  # ──────────────────────────────────────────────────────────────────────────
+  #  4. NIGHT MODE — Quiet operation at night
+  # ──────────────────────────────────────────────────────────────────────────
+
+  - id: smart_recup_night_on
+    alias: "Рекуператор: Ночной режим ВКЛ"
+    description: "Снижает обороты рекуператоров на ночь"
+    trigger:
+      - platform: time
+        at: input_datetime.smart_recup_night_start
+    condition:
+      - condition: state
+        entity_id: input_boolean.smart_recup_night_mode
+        state: "on"
+    action:
+      - service: fan.set_percentage
+        target:
+          entity_id:
+            - fan.siku_blauberg_fan_192_168_1_41
+            - fan.siku_blauberg_fan_192_168_1_49
+            - fan.siku_blauberg_fan_192_168_1_50
+        data:
+          percentage: "{{ states('input_number.smart_recup_night_speed') | int(25) }}"
+
+  - id: smart_recup_night_off
+    alias: "Рекуператор: Ночной режим ВЫКЛ"
+    description: "Возвращает нормальные обороты утром"
+    trigger:
+      - platform: time
+        at: input_datetime.smart_recup_night_end
+    condition:
+      - condition: state
+        entity_id: input_boolean.smart_recup_night_mode
+        state: "on"
+    action:
+      - service: fan.set_percentage
+        target:
+          entity_id:
+            - fan.siku_blauberg_fan_192_168_1_41
+            - fan.siku_blauberg_fan_192_168_1_49
+            - fan.siku_blauberg_fan_192_168_1_50
+        data:
+          percentage: 50
+
+  # ──────────────────────────────────────────────────────────────────────────
+  #  5. FILTER MANAGEMENT — Alert when filter life is low
+  # ──────────────────────────────────────────────────────────────────────────
+
+  - id: smart_recup_filter_alert_ameli
+    alias: "Рекуператор: Фильтр — Амели"
+    description: "Уведомление когда фильтр подходит к замене"
+    trigger:
+      - platform: numeric_state
+        entity_id: sensor.smart_recup_filter_ameli
+        below: input_number.smart_recup_filter_warn_days
+    condition:
+      - condition: state
+        entity_id: input_boolean.smart_recup_filter_alert
+        state: "on"
+    action:
+      - service: persistent_notification.create
+        data:
+          title: "🔄 Фильтр: Спальня Амели"
+          message: >
+            Осталось {{ states('sensor.smart_recup_filter_ameli') }} дней.
+            Запланируйте замену фильтра!
+          notification_id: filter_alert_ameli
+
+  - id: smart_recup_filter_alert_master
+    alias: "Рекуператор: Фильтр — Мастер"
+    trigger:
+      - platform: numeric_state
+        entity_id: sensor.smart_recup_filter_master
+        below: input_number.smart_recup_filter_warn_days
+    condition:
+      - condition: state
+        entity_id: input_boolean.smart_recup_filter_alert
+        state: "on"
+    action:
+      - service: persistent_notification.create
+        data:
+          title: "🔄 Фильтр: Мастер Спальня"
+          message: >
+            Осталось {{ states('sensor.smart_recup_filter_master') }} дней.
+            Запланируйте замену фильтра!
+          notification_id: filter_alert_master
+
+  - id: smart_recup_filter_alert_boys
+    alias: "Рекуператор: Фильтр — Пацаны"
+    trigger:
+      - platform: numeric_state
+        entity_id: sensor.smart_recup_filter_boys
+        below: input_number.smart_recup_filter_warn_days
+    condition:
+      - condition: state
+        entity_id: input_boolean.smart_recup_filter_alert
+        state: "on"
+    action:
+      - service: persistent_notification.create
+        data:
+          title: "🔄 Фильтр: Спальня Пацанов"
+          message: >
+            Осталось {{ states('sensor.smart_recup_filter_boys') }} дней.
+            Запланируйте замену фильтра!
+          notification_id: filter_alert_boys
+
+  # ──────────────────────────────────────────────────────────────────────────
+  #  6. WEATHER ADAPTATION — React to extreme weather
+  # ──────────────────────────────────────────────────────────────────────────
+
+  # Storm / Rain — minimize fresh air intake
+  - id: smart_recup_weather_storm
+    alias: "Рекуператор: Плохая погода — Мин. обороты"
+    description: "Минимальные обороты при дожде/шторме для защиты от влажного воздуха"
+    trigger:
+      - platform: state
+        entity_id: weather.forecast_home_assistant
+        to:
+          - "rainy"
+          - "pouring"
+          - "lightning"
+          - "lightning-rainy"
+          - "hail"
+    condition:
+      - condition: state
+        entity_id: input_boolean.smart_recup_weather_adapt
+        state: "on"
+    action:
+      - service: fan.set_percentage
+        target:
+          entity_id:
+            - fan.siku_blauberg_fan_192_168_1_41
+            - fan.siku_blauberg_fan_192_168_1_49
+            - fan.siku_blauberg_fan_192_168_1_50
+        data:
+          percentage: 25
+      - service: persistent_notification.create
+        data:
+          title: "🌧️ Погода: Защитный режим"
+          message: >
+            Погода: {{ states('weather.forecast_home_assistant') }}.
+            Рекуператоры переведены на минимум.
+
+  # Clear weather — restore normal
+  - id: smart_recup_weather_clear
+    alias: "Рекуператор: Хорошая погода — Норма"
+    trigger:
+      - platform: state
+        entity_id: weather.forecast_home_assistant
+        to:
+          - "sunny"
+          - "clear-night"
+          - "partlycloudy"
+          - "cloudy"
+    condition:
+      - condition: state
+        entity_id: input_boolean.smart_recup_weather_adapt
+        state: "on"
+    action:
+      - service: fan.set_percentage
+        target:
+          entity_id:
+            - fan.siku_blauberg_fan_192_168_1_41
+            - fan.siku_blauberg_fan_192_168_1_49
+            - fan.siku_blauberg_fan_192_168_1_50
+        data:
+          percentage: 50
+
+  # Extreme heat — reduce intake
+  - id: smart_recup_weather_hot
+    alias: "Рекуператор: Жара — Мин. обороты"
+    description: "Минимальные обороты при экстремальной жаре на улице"
+    trigger:
+      - platform: numeric_state
+        entity_id: sensor.smart_recup_outdoor_temp
+        above: input_number.smart_recup_hot_threshold
+        for: "00:10:00"
+    condition:
+      - condition: state
+        entity_id: input_boolean.smart_recup_weather_adapt
+        state: "on"
+    action:
+      - service: fan.set_percentage
+        target:
+          entity_id:
+            - fan.siku_blauberg_fan_192_168_1_41
+            - fan.siku_blauberg_fan_192_168_1_49
+            - fan.siku_blauberg_fan_192_168_1_50
+        data:
+          percentage: 25
+      - service: persistent_notification.create
+        data:
+          title: "🌡️ Жара: Защитный режим"
+          message: >
+            На улице {{ states('sensor.smart_recup_outdoor_temp') }}°C.
+            Рекуператоры снижены для предотвращения перегрева.
